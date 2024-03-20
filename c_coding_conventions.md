@@ -589,3 +589,46 @@ DBGPRINT("function_name: %s: %d\n", error_message(), errno); // В первом 
 
 Сложение / Вычитание
 Рассмотрим следующий код, который обрабатывает протокол длины-значения с длиной 4 байта, за которой следует содержимое:
+```c
+int32_t
+process_buffer(uint8_t *buffer, size_t buffer_size) {
+	int32_t rc = 0;
+	size_t offset = 0;
+	uint32_t item_len = 0;
+  
+	while (offset < buffer_size) {
+		// Убедимся, что есть достаточно места для чтения длины следующего элемента
+ 		// Если количество, которое мы хотим получить (sizeof(uint32_t)), превышает оставшееся количество (size - offset), то возникает ошибка
+		if (sizeof(uint32_t) > buffer_size - offset) {
+ 			rc = ERR_INSUFFICIENT_DATA;
+ 			goto ErrorExit; 
+ 		}
+  
+		// Извлекаем 4-байтовую длину из буфера
+		item_len = *((uint32_t *) (buffer + offset));
+  
+		// Убедимся, что есть достаточно места для чтения указанного количества
+		// Обязательно включите 4-байтовое поле длины в расчет места
+		if (item_len > buffer_size - offset - sizeof(uint32_t)) {
+			rc = ERR_INSUFFICIENT_DATA;
+ 			goto ErrorExit; 
+		}
+  
+		rc = process_some_data(buffer + offset + sizeof(uint32_t),
+						   buffer_size - offset - sizeof(uint32_t));
+ 		// ...
+  
+ 		offset += sizeof(uint32_t) + item_len;
+ 	}
+  
+ErrorExit:
+	return rc;
+}
+```
+Интуитивный метод проверки результата сложения небезопасен. В следующих примерах демонстрируются различные методы выполнения проверок на переполнение. Все примеры в этом блоке проверяют состояние ошибки.
+```c
+if (offset + item_len < offset) { 			// Плохо – Зависит от машинно-специфического поведения переполнения и может быть оптимизировано
+if (offset + item_len > buffer_size) { 		// Плохо – offset + item_len может привести к переполнению и пройдет эту проверку
+if (item_len > buffer_size - offset) { 		// Хорошо – Проверяем, превышает ли количество, которое мы хотим получить, фактическое оставшееся количество
+if (buffer_size - offset < item_len) { 		// Хорошо – Проверяем, меньше ли оставшееся количество, чем желаемое количество
+```
